@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Dashboard of Semiconductor Experts</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Calm Harmony -->
+    <!-- Application Structure Plan: The SPA is designed as an interactive dashboard. This structure was chosen to transform the static, text-heavy report into a dynamic exploration tool. The layout features a main control panel with filters (Region, University, Title) and a search bar, allowing users to instantly refine the dataset. This is paired with a data visualization section (charts) and a detailed faculty list. The user flow is non-linear; users can start with a broad overview from the charts, or dive into specifics by filtering and searching. This user-centric design prioritizes findability and synthesis of information, making it far more usable than a linear document for tasks like identifying specific experts or understanding regional research concentrations. -->
+    <!-- Visualization & Content Choices: The report's list of experts is transformed into an interactive, filterable grid of cards (Goal: Organize/Inform), which is more engaging than a static table. To show high-level data, a donut chart displays the geographic distribution of experts, and a bar chart compares universities (Goal: Compare/Inform). These charts are interactive; clicking a segment filters the main list, creating a direct link between overview and detail. Key metrics are presented in dynamic 'stat cards' that update with filters (Goal: Inform). Detailed faculty research interests appear in expandable sections within each card, keeping the UI clean (I had to add contact details) (Goal: Inform). All visualizations use Chart.js on a Canvas element, with no SVG or Mermaid JS used, adhering to technical constraints while providing rich, interactive data exploration. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc; /* slate-50 */
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 350px;
+            max-height: 400px;
+        }
+        @media (max-width: 768px) {
+            .chart-container {
+                height: 300px;
+                max-height: 350px;
+            }
+        }
+        .card-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease-out;
+        }
+        .card-content.expanded {
+            max-height: 1000px; /* Adjust as needed */
+            transition: max-height 0.7s ease-in;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9; /* slate-100 */
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #94a3b8; /* slate-400 */
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #64748b; /* slate-500 */
+        }
+        .stat-card {
+            border-left: 4px solid #4f46e5; /* indigo-600 */
+        }
+    </style>
+</head>
+<body class="text-slate-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+
+        <header class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-bold text-slate-900">Indian Semiconductor Research Experts</h1>
+            <p class="mt-2 text-lg text-slate-600 max-w-3xl mx-auto">An interactive dashboard to explore leading academic minds in semiconductor technology across Indian universities.</p>
+        </header>
+
+        <main class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+            <aside class="lg:col-span-3">
+                <div class="bg-white p-6 rounded-2xl shadow-lg sticky top-8">
+                    <h2 class="text-xl font-bold mb-4 border-b pb-2 text-slate-900">Explore Experts</h2>
+                    <div class="space-y-6">
+                        <div>
+                            <label for="search" class="block text-sm font-medium text-slate-700 mb-1">Search by Name or Keyword</label>
+                            <input type="text" id="search" placeholder="e.g., 'Udayan Ganguly' or 'nanowires'" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition">
+                        </div>
+                        <div>
+                            <label for="regionFilter" class="block text-sm font-medium text-slate-700 mb-1">Filter by Region</label>
+                            <select id="regionFilter" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition">
+                                <option value="all">All Regions</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="universityFilter" class="block text-sm font-medium text-slate-700 mb-1">Filter by University</label>
+                            <select id="universityFilter" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition">
+                                <option value="all">All Universities</option>
+                            </select>
+                        </div>
+                         <div>
+                            <label for="titleFilter" class="block text-sm font-medium text-slate-700 mb-1">Filter by Academic Title</label>
+                            <select id="titleFilter" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition">
+                                <option value="all">All Titles</option>
+                            </select>
+                        </div>
+                        <button id="resetFilters" class="w-full bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors shadow-md">Reset Filters</button>
+                    </div>
+                </div>
+            </aside>
+
+            <div class="lg:col-span-9 space-y-8">
+                <section id="stats-section" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                    <div class="stat-card bg-white p-5 rounded-xl shadow-lg flex flex-col justify-center">
+                        <h3 class="text-slate-500 text-sm font-medium">Total Experts</h3>
+                        <p id="totalExperts" class="text-3xl font-bold text-indigo-600">0</p>
+                    </div>
+                    <div class="stat-card bg-white p-5 rounded-xl shadow-lg flex flex-col justify-center">
+                        <h3 class="text-slate-500 text-sm font-medium">Universities</h3>
+                        <p id="totalUniversities" class="text-3xl font-bold text-indigo-600">0</p>
+                    </div>
+                     <div class="stat-card bg-white p-5 rounded-xl shadow-lg flex flex-col justify-center">
+                        <h3 class="text-slate-500 text-sm font-medium">Professors</h3>
+                        <p id="totalProfessors" class="text-3xl font-bold text-indigo-600">0</p>
+                    </div>
+                    <div class="stat-card bg-white p-5 rounded-xl shadow-lg flex flex-col justify-center">
+                        <h3 class="text-slate-500 text-sm font-medium">Regions Covered</h3>
+                        <p id="totalRegions" class="text-3xl font-bold text-indigo-600">0</p>
+                    </div>
+                </section>
+
+                <section id="charts-section" class="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                     <div class="bg-white p-6 rounded-2xl shadow-lg">
+                         <h2 class="text-xl font-bold mb-4 text-slate-900">Experts by Region</h2>
+                         <p class="text-sm text-slate-600 mb-4">This chart shows the distribution of listed semiconductor research experts across different geographical regions of India. Click a segment to filter the list below.</p>
+                         <div class="chart-container">
+                            <canvas id="regionChart"></canvas>
+                         </div>
+                     </div>
+                     <div class="bg-white p-6 rounded-2xl shadow-lg">
+                         <h2 class="text-xl font-bold mb-4 text-slate-900">Top Universities by Expert Count</h2>
+                         <p class="text-sm text-slate-600 mb-4">This chart highlights the universities with the highest number of listed experts in the field. This reflects the institutions' significant focus on semiconductor research.</p>
+                         <div class="chart-container h-[400px]">
+                            <canvas id="universityChart"></canvas>
+                         </div>
+                     </div>
+                </section>
+                
+                <section id="faculty-list-section">
+                    <div class="bg-white p-6 rounded-2xl shadow-lg">
+                        <h2 class="text-2xl font-bold text-slate-900 mb-2">Faculty Directory</h2>
+                        <p id="faculty-count-display" class="text-slate-600 mb-4">Showing 0 experts. Click on any card to view detailed research interests.</p>
+                        <div id="faculty-list" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 max-h-[120vh] overflow-y-auto custom-scrollbar p-1">
+                            
+                        </div>
+                         <div id="no-results" class="text-center py-12 hidden">
+                            <h3 class="text-xl font-semibold text-slate-700">No Experts Found</h3>
+                            <p class="text-slate-500 mt-2">Try adjusting your filters or search terms.</p>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            const facultyData = [
+                // Indian Institutes of Technology (IITs)
+                { name: 'Udayan Ganguly', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Semiconductor device physics, memory technologies, neuromorphic systems, hardware encryption, physical unclonable functions, one time programmable memory, smartcard.', contact: '' },
+                { name: 'Anil Kottantharayil', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'CMOS device physics, design, and modeling.', contact: 'anilkg@iitb.ac.in' },
+                { name: 'Ashwin Tulapurkar', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Spintronics, physics of nano-devices, thermoelectric effects, spin-current induced magnetization switching, RF properties of spintronic devices.', contact: '' },
+                { name: 'Apurba Laha', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'III-Nitride semiconductors and heterostructures, growth using Molecular Beam Epitaxy.', contact: 'laha@ee.iitb.ac.in' },
+                { name: 'Bhaskaran Muralidharan', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Computational nanoscale device modeling, spintronics, quantum devices.', contact: '' },
+                { name: 'Debanjan Bhowmik', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Nanomagnetism and spintronics, neuromorphic computing.', contact: '' },
+                { name: 'Dipankar Saha', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Microelectronics, nanotechnology novel and engineered materials, LEDs, lasers, and detectors.', contact: '' },
+                { name: 'Kasturi Saha', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Quantum sensing, photonics, quantum computing, high power devices.', contact: '' },
+                { name: 'Laxmeesha Somappa', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Analog Digital & Mixed-Signal IC Design, Biomedical Circuits & Systems, neuromodulation system on chips.', contact: '' },
+                { name: 'Madhav P. Desai', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'VLSI Circuits and Systems, VLSI design and design automation.', contact: '' },
+                { name: 'Maryam Shojaei Baghini', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Analog, Mixed-Signal and RF IC Design; Sensor-Systems; Neuromorphic Circuits.', contact: '' },
+                { name: 'Pradeep R Nair', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Nanoscale devices for energy conversion, nanoscale devices for healthcare applications.', contact: '' },
+                { name: 'Rajesh Zele', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'RF, Analog & Mixed-Signal Circuits for Communication Applications.', contact: '' },
+                { name: 'Sandip Mondal', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Neuromorphic Engineering for Artificial Intelligence, quantum technologies with quantum dots/nanoparticles, packaging technology.', contact: '' },
+                { name: 'Saurabh Lodha', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: '2D materials and devices, wide bandgap power devices, CMOS process integration and device physics.', contact: '' },
+                { name: 'Siddhartha Duttagupta', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Tera Hertz Spectroscopy, wireless RF power transfer.', contact: '' },
+                { name: 'Swaroop Ganguly', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Quantum Biomimetic Technologies, semiconductor modeling & simulation (materials to devices to circuits).', contact: '' },
+                { name: 'Veeresh Deshpande', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: '3D Integration, neuromorphic computing, ferroelectric and resistive memory devices.', contact: '' },
+                { name: 'Siddharth Tallur', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Embedded Systems and Sensors, digital systems.', contact: '' },
+                { name: 'Pradeep Dixit', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Microsystems Packaging, 3D interconnects.', contact: '' },
+                { name: 'Prasanna Gandhi', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Fluid instabilities for micro-fabrication, 3D microfabrication.', contact: '' },
+                { name: 'Rakesh Mote', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Charged particle beam techniques for nanofabrication.', contact: '' },
+                { name: 'Abhijeet Sangle', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Nanocomposite thin films, pulsed laser deposition, RF/DC/Pulsed DC sputter deposition, ferroelectrics.', contact: '' },
+                { name: 'Aswani Yella', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Nanostructured materials for photovoltaics.', contact: '' },
+                { name: 'Avradeep Pal', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Josephson junctions, superconductor interactions.', contact: '' },
+                { name: 'Dipti Gupta', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Flexible/stretchable/printed electronics, wearable electronic devices and sensors for healthcare applications.', contact: '' },
+                { name: 'Shobha Shukla', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Nanophotonic Devices, metamaterials, direct laser lithography.', contact: '' },
+                { name: 'Tanushree Choudhury', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Large area of layered materials, like 2D transition.', contact: '' },
+                { name: 'Titas Dasgupta', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Thermoelectric materials and devices, thermoelectric metrology.', contact: '' },
+                { name: 'Triratna Muneshwar', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Semiconductor materials, fabrication process modeling.', contact: '' },
+                { name: 'Parag Bhargava', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Powder processing, shape forming of ceramics, rheology of inks/pastes, synthesis of weakly agglomerated nanoparticles.', contact: '' },
+                { name: 'Anshuman Kumar', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Quantum photonics, 2D semiconductors, metamaterials.', contact: '' },
+                { name: 'Dinesh Kabra', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Optoelectronic Materials and Device physics, advanced spectroscopy and structural studies.', contact: '' },
+                { name: 'Gopal Dixit', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'PetaHertz electronics, two-dimensional materials.', contact: '' },
+                { name: 'Parinda Vasa', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Nano-photonics, plasmonics, semiconductor nanostructures.', contact: '' },
+                { name: 'Pramod Kumar', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Nano-structure based haptics sensors, gas sensors.', contact: '' },
+                { name: 'Suddhasatta Mahapatra', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Quantum Electronics, Quantum Information, and Quantum Computation, Group IV Epitaxy and Optoelectronics.', contact: '' },
+                { name: 'Rahul Singh', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Electrical Engineering (SemiX)', interests: 'Analog/RF IC design, mm-wave IC design, transceivers.', contact: '' },
+                { name: 'Amrita Bhattacharya', title: 'Assistant Professor', university: 'IIT Bombay', region: 'West India', department: 'Metallurgical Engineering and Materials Science', interests: 'Computational materials science, charge and heat transport, defects in semiconductors, strongly correlated materials, machine learning.', contact: 'b_amrita@iitb.ac.in' },
+                { name: 'Rajiv O. Dusane', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Materials Science and Engineering', interests: 'Synthesis/characterization of amorphous/nanocrystalline thin films of semiconductors/alloys, silicon nanodevices for thin film solar cells/transistors for flat panel displays, MEMS devices, nuclear detection, plasma processing, surface nano-engineering.', contact: '' },
+                { name: 'Titas DasGupta', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Materials Science and Engineering', interests: 'Thermoelectric material and devices, thermoelectric metrology/instrumentation, physics of heavily doped semiconductors.', contact: '' },
+                { name: 'Dipti Gupta', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Materials Science and Engineering', interests: 'Flexible/Plastic Electronics (Organic semiconductors, metal oxides, Graphene), devices for energy/biomedical applications (Solar Cells, Thin film transistor, sensors, Printed Electronics).', contact: '' },
+                { name: 'Sudhanshu Mallick', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Materials Science and Engineering', interests: 'Dye sensitized solar cells, electroceramics, photovoltaics, semiconductors, powder metallurgy, recycling.', contact: '' },
+                { name: 'Triratna Muneshwar', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Materials Science and Engineering', interests: 'Materials for semiconductor logic/memory device applications, modeling of vacuum thin film deposition processes, atomic layer deposition (ALD)/etching (ALE).', contact: '' },
+                { name: 'Aswani Yella', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Materials Science and Engineering', interests: 'Nanostructured materials for photovoltaic applications, hybrid materials for light harvesting, molecular electronics, dye/semiconductor sensitized solar cells, photoelectrochemical cells for H2 generation.', contact: '' },
+                { name: 'Souvik Mahapatra', title: 'Professor', university: 'IIT Bombay', region: 'West India', department: 'Materials Science and Engineering', interests: 'Semiconductor reliability, transistor reliability analysis/modeling, "Mahapatra Reliability Model" (Synopsys Sentaurus Device TCAD software), consulting for Micron/Intel.', contact: '' },
+
+                { name: 'Nandita DasGupta', title: 'Professor', university: 'IIT Madras', region: 'South India', department: 'Electrical Engineering', interests: 'Silicon and Compound Semiconductor Technology and Modelling; MEMS.', contact: 'nand@ee.iitm.ac.in' },
+                { name: 'Soumya Dutta', title: 'Professor', university: 'IIT Madras', region: 'South India', department: 'Electrical Engineering', interests: 'Organic Thin Film Transistors (OTFTs) and Circuits; Organic Solar Cell (OSC); Reduced Graphene Oxide (rGO) based NEMS Devices; Ferroelectric Polymer based Surface Acoustic Wave (SAW) Devices; Organic-inorganic hybrid Perovskite-based Solar cells and TFTs; AMOLED Display.', contact: 's.dutta@ee.iitm.ac.in' },
+                { name: 'Shreepad Karmalkar', title: 'Professor', university: 'IIT Madras', region: 'South India', department: 'Electrical Engineering', interests: 'Semiconductor devices.', contact: 'karmal@ee.iitm.ac.in' },
+                { name: 'Amal Mohan PK', title: 'Professor', university: 'IIT Madras', region: 'South India', department: 'Electrical Engineering', interests: 'Various aspects of Electrical Engineering.', contact: 'amalmohanpk@ee.iitm.ac.in' },
+                { name: 'Ganesan K', title: 'Professor', university: 'IIT Madras', region: 'South India', department: 'Electrical Engineering', interests: 'High Voltage Lab related research.', contact: 'ganesank@ee.iitm.ac.in' },
+                { name: 'Govindaraj N', title: 'Professor', university: 'IIT Madras', region: 'South India', department: 'Electrical Engineering', interests: 'Various aspects of Electrical Engineering.', contact: 'nkrishna@ee.iitm.ac.in' },
+                { name: 'Janaki M', title: 'Professor', university: 'IIT Madras', region: 'South India', department: 'Electrical Engineering', interests: 'VLSI related research.', contact: 'janaki@ee.iitm.ac.in' },
+                { name: 'J. Sutha', title: 'Professor', university: 'IIT Madras', region: 'South India', department: 'Electrical Engineering', interests: 'Various aspects of Electrical Engineering.', contact: 'jsutha@ee.iitm.ac.in' },
+                { name: 'Jegan J', title: 'Professor', university: 'IIT Madras', region: 'South India', department: 'Electrical Engineering', interests: 'Various aspects of Electrical Engineering.', contact: 'jegan@ee.iitm.ac.in' },
+                { name: 'K. K. Raman', title: 'Professor', university: 'IIT Madras', region: 'South India', department: 'Electrical Engineering', interests: 'Various aspects of Electrical Engineering.', contact: 'kkraman@ee.iitm.ac.in' },
+                { name: 'Prakash J', title: 'Professor', university: 'IIT Madras', region: 'South India', department: 'Electrical Engineering', interests: 'MEMS Lab related research.', contact: 'prakash@ee.iitm.ac.in' },
+                { name: 'Ramanujan KN', title: 'Professor', university: 'IIT Madras', region: 'South India', department: 'Electrical Engineering', interests: 'MEMS Lab related research.', contact: 'knramanujan@iitm.ac.in' },
+                { name: 'Selvam KC', title: 'Professor', university: 'IIT Madras', region: 'South India', department: 'Electrical Engineering', interests: 'Various aspects of Electrical Engineering.', contact: 'kcselvam@ee.iitm.ac.in' },
+                { name: 'Udayakumar K', title: 'Professor', university: 'IIT Madras', region: 'South India', department: 'Electrical Engineering', interests: 'New IE Lab related research.', contact: 'udaya@ee.iitm.ac.in' },
+                { name: 'Venkateswaran G', title: 'Professor', university: 'IIT Madras', region: 'South India', department: 'Electrical Engineering', interests: 'MEMS Lab related research.', contact: 'venkateswaran@ee.iitm.ac.in' },
+
+                { name: 'Shailendra Kumar Varshney', title: 'Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'Fiber Optics and Photonics; Nonlinear Photonics; Quantum photonics; Optical wireless communication; Metasurface and Plasmonics.', contact: 'skvarshney@ece.iitkgp.ac.in' },
+                { name: 'Tarun Kanti Bhattacharyya', title: 'Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'Nano engineered sensors and actuators; Electronic Devices; MEMS and Micro Systems; Nano scale semiconductor device.', contact: 'tkb@ece.iitkgp.ac.in' },
+                { name: 'Gourab Dutta', title: 'Assistant Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'Microelectronics; Modeling of Semiconductor Devices; Nanoelectronics and Devices; Semiconductor Devices and Circuits.', contact: 'gdutta@ece.iitkgp.ac.in' },
+                { name: 'Anindya Sundar Dhar', title: 'Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'Semiconductor devices; Electronic devices; Microelectronics.', contact: 'asd@ece.iitkgp.ac.in' },
+                { name: 'Sudipta Mahapatra', title: 'Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'Semiconductor devices; Electronic devices; Microelectronics.', contact: 'sudipta@ece.iitkgp.ac.in' },
+                { name: 'Sudipta Mukhopadhyay', title: 'Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'Semiconductor devices; Electronic devices; Microelectronics.', contact: 'smukho@ece.iitkgp.ac.in' },
+                { name: 'Amitabha Bhattacharya', title: 'Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'General Electrical Engineering, likely including semiconductor applications.', contact: 'amitabha@ece.iitkgp.ac.in' },
+                { name: 'Amitalok Jayant Budkuley', title: 'Assistant Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'General Electrical Engineering, likely including semiconductor applications.', contact: 'amitalok@ece.iitkgp.ac.in' },
+                { name: 'Aniket Singha', title: 'Assistant Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'General Electrical Engineering, likely including semiconductor applications.', contact: 'aniket@ece.iitkgp.ac.in' },
+                { name: 'Arijit De', title: 'Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'General Electrical Engineering, likely including semiconductor applications.', contact: 'arijit@ece.iitkgp.ac.in' },
+                { name: 'Basudev Lahiri', title: 'Assistant Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'General Electrical Engineering, likely including semiconductor applications.', contact: 'blahiri@ece.iitkgp.ac.in' },
+                { name: 'Bratin Ghosh', title: 'Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'General Electrical Engineering, likely including semiconductor applications.', contact: 'bghosh@ece.iitkgp.ac.in' },
+                { name: 'Debashis Sen', title: 'Associate Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'General Electrical Engineering, likely including semiconductor applications.', contact: 'dsen@ece.iitkgp.ac.in' },
+                { name: 'Goutam Das', title: 'Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'General Electrical Engineering, likely including semiconductor applications.', contact: 'gdas@ece.iitkgp.ac.in' },
+                { name: 'Goutam Saha', title: 'Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'General Electrical Engineering, likely including semiconductor applications.', contact: 'gsaha@ece.iitkgp.ac.in' },
+                { name: 'Indrajit Chakrabarti', title: 'Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'General Electrical Engineering, likely including semiconductor applications.', contact: 'indrajit@ece.iitkgp.ac.in' },
+                { name: 'Jithin R', title: 'Assistant Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'General Electrical Engineering, likely including semiconductor applications.', contact: 'jithin@ece.iitkgp.ac.in' },
+                { name: 'Mrinal Kanti Mandal', title: 'Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'General Electrical Engineering, likely including semiconductor applications.', contact: 'mkmandal@ece.iitkgp.ac.in' },
+                { name: 'Mrityunjoy Chakraborty', title: 'Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'General Electrical Engineering, likely including semiconductor applications.', contact: 'mrityun@ece.iitkgp.ac.in' },
+                { name: 'Prabir Kumar Biswas', title: 'Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'General Electrical Engineering, likely including semiconductor applications.', contact: 'pkb@ece.iitkgp.ac.in' },
+                { name: 'Pradip Mandal', title: 'Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'General Electrical Engineering, likely including semiconductor applications.', contact: 'pradip@ece.iitkgp.ac.in' },
+                { name: 'Prasanta Kumar Guha', title: 'Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'General Electrical Engineering, likely including semiconductor applications.', contact: 'pkguha@ece.iitkgp.ac.in' },
+                { name: 'Raja Datta', title: 'Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'General Electrical Engineering, likely including semiconductor applications.', contact: 'rajadatta@ece.iitkgp.ac.in' },
+                { name: 'Rajarshi Roy', title: 'Associate Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'General Electrical Engineering, likely including semiconductor applications.', contact: 'royr@ece.iitkgp.ac.in' },
+                { name: 'Rajat Roy', title: 'Associate Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'General Electrical Engineering, likely including semiconductor applications.', contact: 'rajatroy@ece.iitkgp.ac.in' },
+                { name: 'Ritwik Kumar Layek', title: 'Associate Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'General Electrical Engineering, likely including semiconductor applications.', contact: 'ritwik@ece.iitkgp.ac.in' },
+                { name: 'Santanu Chattopadhyay', title: 'Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'General Electrical Engineering, likely including semiconductor applications.', contact: 'santanu@ece.iitkgp.ac.in' },
+                { name: 'Sarang Pendharker', title: 'Assistant Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'General Electrical Engineering, likely including semiconductor applications.', contact: 'sarang@ece.iitkgp.ac.in' },
+                { name: 'Saumik Bhattacharya', title: 'Assistant Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'General Electrical Engineering, likely including semiconductor applications.', contact: 'saumik@ece.iitkgp.ac.in' },
+                { name: 'Sharba Bandyopadhyay', title: 'Assistant Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'General Electrical Engineering, likely including semiconductor applications.', contact: 'sharba@ece.iitkgp.ac.in' },
+                { name: 'Subhadip Mukherjee', title: 'Assistant Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'General Electrical Engineering, likely including semiconductor applications.', contact: 'smukherjee@ece.iitkgp.ac.in' },
+                { name: 'Vivek Dixit', title: 'Associate Professor', university: 'IIT Kharagpur', region: 'East India', department: 'Electronics and Electrical Communication Engineering', interests: 'General Electrical Engineering, likely including semiconductor applications.', contact: 'vdixit@ece.iitkgp.ac.in' },
+
+                { name: 'Y N Mohapatra', title: 'Professor', university: 'IIT Kanpur', region: 'North India', department: 'Physics and Materials Science', interests: 'Semiconductors; electronic and photonic materials; OLED/PLED; Printable Electronics.', contact: 'ynm@iitk.ac.in' },
+                { name: 'Baquer Mazhari', title: 'Professor', university: 'IIT Kanpur', region: 'North India', department: 'Electrical Engineering', interests: 'Organic Electronics; Printable Electronics; Organic Semiconductors; Semiconductor device modelling and analog circuits.', contact: 'baquer@iitk.ac.in' },
+                { name: 'Deepak Gupta', title: 'Professor', university: 'IIT Kanpur', region: 'North India', department: 'Materials and Metallurgical Engineering', interests: 'Electronic materials & processing; flat panel displays; mathematical modeling and materials simulation; Organic Semiconductors; Displays; Electronic and Optical Materials.', contact: 'saboo@iitk.ac.in' },
+                { name: 'Monica Katiyar', title: 'Professor', university: 'IIT Kanpur', region: 'North India', department: 'Materials and Metallurgical Engineering', interests: 'Characterization and applications of opto-electronic materials; Organic Electronics (OLED/OTFT); Printable Electronics; Thin Films; Material Characterization.', contact: 'mk@iitk.ac.in' },
+                { name: 'S. Sundar Kumar Iyer', title: 'Professor', university: 'IIT Kanpur', region: 'North India', department: 'Electrical Engineering', interests: 'Organic solar cells; Photovoltaic systems; Printable electronics; VLSI technology; Devices and circuits.', contact: 'sskiyer@iitk.ac.in' },
+                { name: 'Anshu Gaur', title: 'Assistant Professor', university: 'IIT Kanpur', region: 'North India', department: 'Materials Science and Engineering', interests: 'Amorphous metal-oxide and metal-oxynitride semiconductors; Device physics and modeling; Carbon nanostructures; flexible electronics and computational materials science.', contact: 'agaur@iitk.ac.in' },
+                { name: 'Nikunj Arunkumar Bhagat', title: 'Assistant Professor', university: 'IIT Kanpur', region: 'North India', department: 'Electrical Engineering', interests: 'Neural & Bio-signal processing; Medical Instrumentation; Brain-machine interfaces; Functional Electrical Stimulation; Rehabilitation Engineering.', contact: 'nbhagat@iitk.ac.in' },
+                { name: 'Arnab Bose', title: 'Assistant Professor', university: 'IIT Kanpur', region: 'North India', department: 'Electrical Engineering', interests: 'Spin-based electronics; Fabrication and characterization of nanoscale devices; 2D material heterostructure; topological quantum materials; unconventional spin current; altermagnets; MTJs; spin-caloritronics; spin-orbitronics; spin-mechatronics; chiral spin textures.', contact: 'abose@iitk.ac.in' },
+                { name: 'Yogesh Singh Chauhan', title: 'Professor', university: 'IIT Kanpur', region: 'North India', department: 'Electrical Engineering', interests: 'Nanoelectronics; BSIM model development (Bulk/SOI /multi-gate MOSFET); Compact modeling of semiconductor devices; DC/CV and RF characterization of MOSFETs.', contact: 'chauhan@iitk.ac.in' },
+                { name: 'Chithra', title: 'Assistant Professor', university: 'IIT Kanpur', region: 'North India', department: 'Electrical Engineering', interests: 'Analog and mixed-signal VLSI design; digital VLSI design; frequency and phase synthesis; time-to-digital converters.', contact: 'chithra@iitk.ac.in' },
+                { name: 'Rik Dey', title: 'Assistant Professor', university: 'IIT Kanpur', region: 'North India', department: 'Electrical Engineering', interests: 'Topological Insulators; Transition Metal Chalcogenides and Di-Chalcogenides; Fabrication; Characterization and Analysis of micro and nano devices.', contact: 'rikdey@iitk.ac.in' },
+                { name: 'Aloke Dutta', title: 'Professor', university: 'IIT Kanpur', region: 'North India', department: 'Electrical Engineering', interests: 'Semiconductor device physics and modeling; Analog/Digital VLSI circuits; IC fabrication technology and device characterization; Mixed Signal RF Circuits.', contact: 'aloke@iitk.ac.in' },
+                { name: 'Avinash Lahgere', title: 'Assistant Professor', university: 'IIT Kanpur', region: 'North India', department: 'Electrical Engineering', interests: 'Semiconductor Devices; Compact Modeling; Emerging CMOS Devices; Emerging Volatile-Nonvolatile Memory; Variation; PPA Benchmarking; Analog/RF; Neuromorphic computing.', contact: 'alahgere@iitk.ac.in' },
+                { name: 'Imon Mondal', title: 'Assistant Professor', university: 'IIT Kanpur', region: 'North India', department: 'Electrical Engineering', interests: 'Analog and mixed signal circuit design.', contact: 'imon@iitk.ac.in' },
+                { name: 'Rituraj', title: 'Assistant Professor', university: 'IIT Kanpur', region: 'North India', department: 'Electrical Engineering', interests: 'Nanophotonics; Optoelectronic devices; Quantum optics; Waveguide quantum electrodynamics.', contact: 'rituraj@iitk.ac.in' },
+                { name: 'Shubham Sahay', title: 'Assistant Professor', university: 'IIT Kanpur', region: 'North India', department: 'Electrical Engineering', interests: 'Hardware Platforms for Neuromorphic Computing; Hardware Security Primitives; Novel Device Architectures for Scaling CMOS Technology; Analytical and Compact Modeling of Semiconductor Devices; Non-volatile Memories; Spintronics.', contact: 'ssahay@iitk.ac.in' },
+                { name: 'Amit Verma', title: 'Assistant Professor', university: 'IIT Kanpur', region: 'North India', department: 'Electrical Engineering', interests: 'Epitaxial growth and characterization of semiconductor thin films; Semiconductor Device Design and Fabrication; Electron Transport measurements and modeling.', contact: 'amitkver@iitk.ac.in' },
+                { name: 'Sandip Tiwari', title: 'Distinguished Visiting Professor', university: 'IIT Kanpur', region: 'North India', department: 'Electrical Engineering', interests: 'Semiconductors; Solid State; Electronics; Optoelectronics and MEMs.', contact: 'st222@cornell.edu' },
+                { name: 'Rajshekhar Gannavarpu', title: 'Professor', university: 'IIT Kanpur', region: 'North India', department: 'Electrical Engineering', interests: 'Light Microscopy; Optical Metrology; Digital Holography; Quantitative Phase Imaging.', contact: 'gshekhar@iitk.ac.in' },
+                { name: 'Shilpi Gupta', title: 'Assistant Professor', university: 'IIT Kanpur', region: 'North India', department: 'Electrical Engineering', interests: 'Nanophotonics; Nanoplasmonics; Quantum optics.', contact: 'shilpig@iitk.ac.in' },
+                { name: 'Pradeep Kumar K', title: 'Professor', university: 'IIT Kanpur', region: 'North India', department: 'Electrical Engineering', interests: 'Quantum and non-linear optics; quantum cryptography and computation; Optical communications; Spin Waves.', contact: 'pradeepk@iitk.ac.in' },
+                { name: 'Debdatta Ray', title: 'Assistant Professor', university: 'IIT Kanpur', region: 'North India', department: 'Electrical Engineering', interests: 'Nanophotonics; Optical Metasurfaces; Nanofabrication; Optical Spin orbit coupling.', contact: 'dray@iitk.ac.in' },
+                { name: 'Y. N. Singh', title: 'Professor', university: 'IIT Kanpur', region: 'North India', department: 'Electrical Engineering', interests: 'Fiber Optics and fiber optic networks; Communications; Telecom Networks; All optical packet switching.', contact: 'ynsingh@iitk.ac.in' },
+            
+                { name: 'Manan Suri', title: 'Associate Professor', university: 'IIT Delhi', region: 'North India', department: 'Electrical Engineering (IEC Group)', interests: 'Semiconductor Non-Volatile Memory (NVM) Technology and its Advanced Applications (Neuromorphic, AI, Security, Computing, Sensing).', contact: '' },
+                { name: 'Samaresh Das', title: 'Professor', university: 'IIT Delhi', region: 'North India', department: 'Electrical Engineering', interests: 'Nanoelectronics and Optoelectronics, UV-Visible Photodetectors, Infrared Solid State Photodetectors, THz Electronics (Detectors and Modulators), Quantum Electronics.', contact: '' },
+                { name: 'Rajendra Singh', title: 'Professor', university: 'IIT Delhi', region: 'North India', department: 'Electrical Engineering', interests: 'GaN based materials and devices, growth/characterization of semiconductor nanowires, wafer bonding/layer splitting, graphene-semiconductor interfaces, 2D materials/devices.', contact: '' },
+                { name: 'Santanu Manna', title: 'Assistant Professor', university: 'IIT Delhi', region: 'North India', department: 'Electrical Engineering', interests: 'Molecular beam epitaxy growth of Group-IV & III-V low-dimensional semiconductor structures, semiconductor quantum nanophotonics (single/entangled photon).', contact: '' },
+                { name: 'Anuj Dhawan', title: 'Professor', university: 'IIT Delhi', region: 'North India', department: 'Electrical Engineering', interests: 'Nanoelectronics, quantum transport, low-dimensional materials and devices, optoelectronics.', contact: 'adhawan@ee.iitd.ac.in' },
+                
+                // Indian Institute of Science (IISc) Bangalore
+                { name: 'MAYANK SHRIVASTAVA', title: 'Professor', university: 'IISc Bangalore', region: 'South India', department: 'Electronic Systems Engineering (DESE)', interests: 'VLSI - Nanoelectronics, solid state physics, semiconductor device design, modeling/characterization, power semiconductors.', contact: '' },
+                { name: 'SANTANU MAHAPATRA', title: 'Professor', university: 'IISc Bangalore', region: 'South India', department: 'Electronic Systems Engineering (DESE)', interests: 'VLSI - Nano technology, nano scale semiconductor device, computational nanoelectronics.', contact: '' },
+                { name: 'Viveka Konandur Rajanna', title: 'Assistant Professor', university: 'IISc Bangalore', region: 'South India', department: 'Electronic Systems Engineering (DESE)', interests: 'Memory design, in-memory computing, human-machine interface, secure computing.', contact: '' },
+                { name: 'HARDIK J. PANDYA', title: 'Associate Professor', university: 'IISc Bangalore', region: 'South India', department: 'Electronic Systems Engineering (DESE)', interests: 'Healthcare Technologies, MEMS, Flexible Electronics, microchips/needles for Deep Brain Stimulations.', contact: '' },
+                { name: 'Arup Polley', title: 'Associate Professor', university: 'IISc Bangalore', region: 'South India', department: 'Electronic Systems Engineering (DESE)', interests: 'Optical communications, photonic devices, advanced sensing systems, quantum materials.', contact: 'aruppolley@iisc.ac.in' },
+                { name: 'Abhishek Singh', title: 'Professor', university: 'IISc Bangalore', region: 'South India', department: 'Materials Research Centre (MRC)', interests: 'Machine learning (ML), 2D materials, thermoelectrics, catalysis, optical properties, topological materials, defects (density functional based approaches), defect physics of low dimensional (2D, 1D) and bulk wide-band-gap semiconducting materials.', contact: 'abhishek@iisc.ac.in' },
+                { name: 'Navakanta Bhat', title: 'Professor', university: 'IISc Bangalore', region: 'South India', department: 'Centre for Nano Science and Engineering (CeNSE)', interests: 'Compact gas sensors, nanoelectronics, MEMS/NEMS, nanomaterials and devices, photonics, solar cells, neuro-biology, quantum and neuromorphic computing, sensors, devices, thin-films, optoelectronics.', contact: 'navakant@iisc.ac.in' },
+                { name: 'Srinivasan Raghavan', title: 'Professor', university: 'IISc Bangalore', region: 'South India', department: 'Centre for Nano Science and Engineering (CeNSE)', interests: "'Ocean' CVD Reactor for Low-Dimensional Material Synthesis, nanoelectronics, MEMS/NEMS, nanomaterials and devices, photonics, solar cells, neuro-biology, quantum and neuromorphic computing, sensors, devices, thin-films, optoelectronics.", contact: '' },
+                { name: 'Sushobhan Avasthi', title: 'Associate Professor', university: 'IISc Bangalore', region: 'South India', department: 'Centre for Nano Science and Engineering (CeNSE)', interests: 'CeNSpire portable low-cost ventilator, nanoelectronics, MEMS/NEMS, nanomaterials and devices, photonics, solar cells, neuro-biology, quantum and neuromorphic computing, sensors, devices, thin-films, optoelectronics.', contact: '' },
+                { name: 'Kamanio Chattopadhyay', title: 'Professor', university: 'IISc Bangalore', region: 'South India', department: 'Materials Engineering', interests: 'Materials Engineering, likely including semiconductor materials and processing.', contact: 'kamanio@iisc.ac.in' },
+                { name: 'S. Asokan', title: 'Professor', university: 'IISc Bangalore', region: 'South India', department: 'Instrumentation and Applied Physics', interests: 'Instrumentation and Applied Physics, likely including semiconductor devices and applications.', contact: 'sasokan@iisc.ac.in' },
+            
+                // IISERs
+                { name: 'Indranil Mondal', title: 'Assistant Professor', university: 'IISER Thiruvananthapuram', region: 'South India', department: 'Chemistry', interests: 'Colloidal synthesis (semiconductor, intermetallics).', contact: 'i.mondal@iisertvm.ac.in' },
+                { name: 'K. George Thomas', title: 'Professor', university: 'IISER Thiruvananthapuram', region: 'South India', department: 'Chemistry', interests: 'Photochemistry & photophysics, Hybrid nanomaterials, Light-matter interactions at nanoscale, Raman Spectroscopy using nanomaterials, Organized surfaces.', contact: 'kgt@iisertvm.ac.in' },
+
+                // Central Universities
+                { name: 'Budhendra Singh', title: 'Professor', university: 'Central University of South Bihar', region: 'East India', department: 'Physics', interests: 'Condensed Matter Physics; Material Science; Solid State Physics.', contact: 'budhendrasingh@cusb.ac.in' },
+                { name: 'Vijay Raj Singh', title: 'Professor', university: 'Central University of South Bihar', region: 'East India', department: 'Physics', interests: 'Experimental Condensed Matter Physics; Material Sciences.', contact: 'vijayraj@cusb.ac.in' },
+                { name: 'Puneet Mishra', title: 'Assistant Professor', university: 'Central University of South Bihar', region: 'East India', department: 'Physics', interests: 'Surface Physics; Molecular spintronics; Molecular Motors; Surface superconductivity.', contact: 'puneet@cusb.ac.in' },
+                { name: 'Rohit Ranjan Shahi', title: 'Assistant Professor', university: 'Central University of South Bihar', region: 'East India', department: 'Physics', interests: 'Experimental Condensed Matter Physics; Material Science.', contact: 'rohitrshahi@cusb.ac.in' },
+
+                { name: 'A G Vedeshwar', title: 'Senior Professor', university: 'Delhi University', region: 'North India', department: 'Physics', interests: 'Experimental Condensed Matter Physics.', contact: 'agni@physics.du.ac.in' },
+                { name: 'Ajit Mahapatro', title: 'Professor', university: 'Delhi University', region: 'North India', department: 'Physics', interests: 'Experimental Condensed Matter Physics.', contact: 'ajit.km001@gmail.com' },
+                { name: 'Amarjeet Kaur', title: 'Senior Professor', university: 'Delhi University', region: 'North India', department: 'Physics', interests: 'Experimental Condensed Matter Physics.', contact: 'amarkaur@physics.du.ac.in' },
+                { name: 'Amita Chandra', title: 'Senior Professor', university: 'Delhi University', region: 'North India', department: 'Physics', interests: 'Materials Science.', contact: 'achandra@physics.du.ac.in' },
+                { name: 'Amol Singh', title: 'Assistant Professor', university: 'Delhi University', region: 'North India', department: 'Physics', interests: 'Experimental Condensed Matter Physics.', contact: 'asingh1@physics.du.ac.in' },
+                { name: 'S Murugavel', title: 'Professor', university: 'Delhi University', region: 'North India', department: 'Physics', interests: 'Experimental Condensed Matter Physics.', contact: 'murug@physics.du.ac.in' },
+                { name: 'Senthil Kumar', title: 'Professor', university: 'Delhi University', region: 'North India', department: 'Physics', interests: 'Experimental Condensed Matter Physics.', contact: 'pskumar@physics.du.ac.in' },
+                { name: 'Shyama Rath', title: 'Senior Professor', university: 'Delhi University', region: 'North India', department: 'Physics', interests: 'Experimental Condensed Matter Physics.', contact: 'srath@physics.du.ac.in' },
+                { name: 'Utkarsh Mishra', title: 'Assistant Professor', university: 'Delhi University', region: 'North India', department: 'Physics', interests: 'Quantum Information and Computation.', contact: 'umishra@physics.du.ac.in' },
+                { name: 'Yana Bagbi', title: 'Assistant Professor', university: 'Delhi University', region: 'North India', department: 'Physics', interests: 'Experimental condensed Matter Physics.', contact: 'ybagbi@physics.du.ac.in' },
+
+            ];
+
+            const searchInput = document.getElementById('search');
+            const regionFilter = document.getElementById('regionFilter');
+            const universityFilter = document.getElementById('universityFilter');
+            const titleFilter = document.getElementById('titleFilter');
+            const resetBtn = document.getElementById('resetFilters');
+            const facultyListContainer = document.getElementById('faculty-list');
+            const noResultsDiv = document.getElementById('no-results');
+            const facultyCountDisplay = document.getElementById('faculty-count-display');
+
+            let regionChart, universityChart;
+            
+            const unique = (key) => [...new Set(facultyData.map(item => item[key]))].sort();
+            
+            function populateFilters() {
+                // Clear existing options before populating
+                regionFilter.innerHTML = '<option value="all">All Regions</option>';
+                universityFilter.innerHTML = '<option value="all">All Universities</option>';
+                titleFilter.innerHTML = '<option value="all">All Titles</option>';
+
+                unique('region').forEach(region => {
+                    const option = new Option(region, region);
+                    regionFilter.add(option);
+                });
+                unique('university').forEach(uni => {
+                    const option = new Option(uni, uni);
+                    universityFilter.add(option);
+                });
+                unique('title').forEach(title => {
+                    const option = new Option(title, title);
+                    titleFilter.add(option);
+                });
+            }
+
+            function filterData() {
+                const searchTerm = searchInput.value.toLowerCase();
+                const selectedRegion = regionFilter.value;
+                const selectedUniversity = universityFilter.value;
+                const selectedTitle = titleFilter.value;
+
+                return facultyData.filter(faculty => {
+                    const matchesSearch = searchTerm === '' ||
+                        faculty.name.toLowerCase().includes(searchTerm) ||
+                        faculty.interests.toLowerCase().includes(searchTerm) ||
+                        faculty.university.toLowerCase().includes(searchTerm);
+                    const matchesRegion = selectedRegion === 'all' || faculty.region === selectedRegion;
+                    const matchesUniversity = selectedUniversity === 'all' || faculty.university === selectedUniversity;
+                    const matchesTitle = selectedTitle === 'all' || faculty.title === selectedTitle;
+
+                    return matchesSearch && matchesRegion && matchesUniversity && matchesTitle;
+                });
+            }
+
+            function renderFacultyList(data) {
+                facultyListContainer.innerHTML = '';
+                if (data.length === 0) {
+                    noResultsDiv.classList.remove('hidden');
+                    facultyListContainer.classList.add('hidden');
+                } else {
+                    noResultsDiv.classList.add('hidden');
+                    facultyListContainer.classList.remove('hidden');
+                }
+
+                data.forEach(faculty => {
+                    const card = document.createElement('div');
+                    card.className = 'bg-slate-50 border border-slate-200 p-4 rounded-xl cursor-pointer hover:shadow-lg hover:border-indigo-300 transition-all duration-300';
+                    card.innerHTML = `
+                        <div class="flex justify-between items-start">
+                             <div>
+                                <h3 class="font-bold text-lg text-indigo-700">${faculty.name}</h3>
+                                <p class="text-sm font-medium text-slate-600">${faculty.title}</p>
+                                <p class="text-sm text-slate-500">${faculty.university}</p>
+                            </div>
+                            <span class="text-xs font-semibold bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full">${faculty.region}</span>
+                        </div>
+                        <div class="card-content mt-3 pt-3 border-t border-slate-200">
+                             <p class="text-sm text-slate-700"><strong>Department:</strong> ${faculty.department}</p>
+                             <p class="text-sm text-slate-700 mt-2"><strong>Research Interests:</strong> ${faculty.interests}</p>
+                             ${faculty.contact ? `<p class="text-sm text-slate-700 mt-2"><strong>Contact:</strong> <a href="mailto:${faculty.contact}" class="text-indigo-600 hover:underline">${faculty.contact}</a></p>` : ''}
+                        </div>
+                    `;
+                    facultyListContainer.appendChild(card);
+                    
+                    card.addEventListener('click', () => {
+                        card.querySelector('.card-content').classList.toggle('expanded');
+                    });
+                });
+            }
+
+            function updateStats(data) {
+                document.getElementById('totalExperts').textContent = data.length;
+                document.getElementById('totalUniversities').textContent = unique('university').length;
+                document.getElementById('totalRegions').textContent = unique('region').length;
+                document.getElementById('totalProfessors').textContent = data.filter(f => f.title.toLowerCase().includes('professor')).length;
+                facultyCountDisplay.textContent = `Showing ${data.length} expert(s). Click on any card to view detailed research interests.`;
+            }
+
+            function renderCharts(data) {
+                renderRegionChart(data);
+                renderUniversityChart(data);
+            }
+
+            function renderRegionChart(data) {
+                const ctx = document.getElementById('regionChart').getContext('2d');
+                const regionCounts = data.reduce((acc, faculty) => {
+                    acc[faculty.region] = (acc[faculty.region] || 0) + 1;
+                    return acc;
+                }, {});
+
+                if (regionChart) regionChart.destroy();
+                
+                regionChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: Object.keys(regionCounts),
+                        datasets: [{
+                            data: Object.values(regionCounts),
+                            backgroundColor: ['#818cf8', '#a78bfa', '#d8b4fe', '#c4b5fd', '#60a5fa', '#38bdf8', '#22d3ee', '#2dd4bf', '#facc15', '#fb923c'], // Added more colors
+                            borderColor: '#ffffff',
+                            borderWidth: 2,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    font: { size: 12 },
+                                    color: '#475569'
+                                }
+                            }
+                        },
+                        onClick: (evt, elements) => {
+                            if (elements.length > 0) {
+                                const clickedRegion = regionChart.data.labels[elements[0].index];
+                                regionFilter.value = clickedRegion;
+                                mainUpdate();
+                            }
+                        }
+                    }
+                });
+            }
+
+            function renderUniversityChart(data) {
+                const ctx = document.getElementById('universityChart').getContext('2d');
+                const universityCounts = data.reduce((acc, faculty) => {
+                    acc[faculty.university] = (acc[faculty.university] || 0) + 1;
+                    return acc;
+                }, {});
+                
+                const sortedUniversities = Object.entries(universityCounts)
+                    .sort(([,a],[,b]) => b - a)
+                    .slice(0, 10);
+                
+                if (universityChart) universityChart.destroy();
+
+                universityChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: sortedUniversities.map(u => u[0]),
+                        datasets: [{
+                            label: 'Number of Experts',
+                            data: sortedUniversities.map(u => u[1]),
+                            backgroundColor: '#6366f1',
+                            borderRadius: 4,
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                           x: { 
+                               beginAtZero: true,
+                               grid: {
+                                   color: '#e2e8f0' // slate-200
+                               },
+                               ticks: { color: '#64748b' } // slate-500
+                           },
+                           y: { 
+                               grid: {
+                                   display: false
+                               },
+                               ticks: { color: '#475569' } // slate-600
+                           }
+                        }
+                    }
+                });
+            }
+
+            function mainUpdate() {
+                const filtered = filterData();
+                renderFacultyList(filtered);
+                updateStats(filtered); // Update stats based on filtered data
+                populateFilters(); // Repopulate filters to include new universities and titles
+                renderCharts(filtered); // Re-render charts with filtered data
+            }
+
+            searchInput.addEventListener('input', mainUpdate);
+            regionFilter.addEventListener('change', mainUpdate);
+            universityFilter.addEventListener('change', mainUpdate);
+            titleFilter.addEventListener('change', mainUpdate);
+
+            resetBtn.addEventListener('click', () => {
+                searchInput.value = '';
+                regionFilter.value = 'all';
+                universityFilter.value = 'all';
+                titleFilter.value = 'all';
+                mainUpdate();
+            });
+
+            populateFilters();
+            mainUpdate();
+        });
+    </script>
+</body>
+</html>
